@@ -136,54 +136,53 @@ class Slag(object):
         result = self.cal_slag_thickness1(r3LowerLayerCoeff, 43.3)
         print(result)
 
-
+    def get_ter_data(self, temper="temperature2022", tags="bg_4bf_taginfo_bak"):
+        coll_ter_data = self.link_coll(temper)
+        coll_tag_data = self.link_coll(tags)
+        list_tag_data = self.list_coll(coll_tag_data)
+        data = {}
+        finaldata = {}
+        document_T2 = coll_ter_data.find().sort("_id", -1)[0]
+        # print(document_T2['_id'])
+        # 对热电偶的id进行转化
+        # print('list_tag_data length: ', len(list_tag_data))
+        # print('total number: ', len(list(document_T2['tags'])))
+        for i in range(len(list_tag_data)):
+            key = list_tag_data[i]['TAGNAME']
+            tag = list_tag_data[i]['NAME']
+            val = document_T2['tags'][key]
+            data[tag] = val
+        print(data)
+        # 以下是一期宝钢 flask框架代码
+        # args = request.args
+        # if len(args) == 0:
+        #     finaldata = data
+        # else:
+        #
+        #     arg = args.get('layer')
+        #     layers = re.split(r'[，,;；\s]\s*', arg)
+        #     for layer in layers:
+        #         layerdata = {}
+        #
+        #         if layer == '1' or layer == 1:
+        #             for key, value in data.items():
+        #                 if key.endswith('A') or re.match(r'.*[0-9]$', key):
+        #                     layerdata[key] = value
+        #             print(len(layerdata))
+        #             finaldata[layer] = layerdata
+        #             continue
+        #         elif layer == '0' or layer == 0:
+        #             finaldata[layer] = data
+        #         else:
+        #             for key, value in data.items():
+        #                 if key.endswith(aplphabetmap[layer]):
+        #                     layerdata[key] = value
+        #             finaldata[layer] = layerdata
+        #             continue
+        #
+        # return jsonify(finaldata)
 
 if __name__ == '__main__':
     myslag = Slag()
     myslag.db_start()
-    coll_ter_data = myslag.link_coll("temperature2022")
-    coll_tag_data = myslag.link_coll("bg_4bf_taginfo_bak")
-    list_tag_data = myslag.list_coll(coll_tag_data)
-    data = {}
-    finaldata = {}
-    document_T2 = coll_ter_data.find().sort("_id", -1)[0]
-    print(document_T2['_id'])
-    # 对热电偶的id进行转化
-    print('list_tag_data length: ', len(list_tag_data))
-    print('total number: ', len(list(document_T2['tags'])))
-    for i in range(len(list_tag_data)):
-        key = list_tag_data[i]['TAGNAME']
-        tag = list_tag_data[i]['NAME']
-        val = document_T2['tags'][key]
-        data[tag] = val
-    print(data)
-
-
-    # 以下是一期宝钢 flask框架代码
-    # args = request.args
-    # if len(args) == 0:
-    #     finaldata = data
-    # else:
-    #
-    #     arg = args.get('layer')
-    #     layers = re.split(r'[，,;；\s]\s*', arg)
-    #     for layer in layers:
-    #         layerdata = {}
-    #
-    #         if layer == '1' or layer == 1:
-    #             for key, value in data.items():
-    #                 if key.endswith('A') or re.match(r'.*[0-9]$', key):
-    #                     layerdata[key] = value
-    #             print(len(layerdata))
-    #             finaldata[layer] = layerdata
-    #             continue
-    #         elif layer == '0' or layer == 0:
-    #             finaldata[layer] = data
-    #         else:
-    #             for key, value in data.items():
-    #                 if key.endswith(aplphabetmap[layer]):
-    #                     layerdata[key] = value
-    #             finaldata[layer] = layerdata
-    #             continue
-    #
-    # return jsonify(finaldata)
+    myslag.get_ter_data()
