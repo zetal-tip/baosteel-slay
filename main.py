@@ -2,8 +2,10 @@
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 import math
-
 from pymongo import MongoClient
+import flask
+from flask import jsonify
+from flask import request
 '''
 常用mongodb api 
 client.list_database_names()  查所以表名
@@ -21,10 +23,10 @@ class Slag(object):
         self.db = None
         self.client_list = None
 
-    def link_client(self, dburl='localhost', port=27017):
+    def link_client(self, host='localhost', port=27017):
         # 连接db
         try:
-            self.client = MongoClient(dburl, port, serverSelectionTimeoutMS=10)
+            self.client = MongoClient(host, port, serverSelectionTimeoutMS=10)
             self.client.admin.command('ping')
             self.client_list = self.client.list_database_names()
             print('client links success')
@@ -49,7 +51,12 @@ class Slag(object):
         # 获取数据库
         self.db = self.client.get_database(db)
 
-    def link_coll(self, collection='G4D301'):
+    def db_start(self, host='localhost', port=27017, db='admin'):
+        self.link_client(host, port)
+        self.link_db(db)
+
+
+    def link_coll(self, collection):
         if self.db is None:
             print('collection links error,please retry')
             return None
@@ -57,10 +64,21 @@ class Slag(object):
         return self.db.get_collection(collection)
 
     @staticmethod
+    def list_coll(collection):
+        if collection is None:
+            print("collection error")
+            return False
+        # 获得元数据并转化为list
+        meta_data = list(collection.find())
+        return meta_data
+
+
+    @staticmethod
     def cal_slag_thickness1(coeff, var):
         if len(coeff) != 4:
             print("coefficient error")
             return False
+        # 炉渣计算公式1 y=(a+cx)/(1+bx+dx2)
         return (coeff[0]+coeff[2] * var)/(1+coeff[1] * var+ coeff[3] * var ** 2)
 
     @staticmethod
@@ -68,6 +86,7 @@ class Slag(object):
         if len(coeff) != 4:
             print("coefficient error")
             return False
+        # 炉渣计算公式2 y=(a+clnx)/(1+blnx+d(lnx)2)
         return (coeff[0]+coeff[2] * math.log(var))/(1+coeff[1] * math.log(var) + coeff[3] * math.log(var) ** 2)
 
     def b0_model(self):
@@ -121,4 +140,50 @@ class Slag(object):
 
 if __name__ == '__main__':
     myslag = Slag()
-    myslag.r1r2r3_model()
+    myslag.db_start()
+    coll_ter_data = myslag.link_coll("temperature2022")
+    coll_tag_data = myslag.link_coll("bg_4bf_taginfo_bak")
+    list_tag_data = myslag.list_coll(coll_tag_data)
+    data = {}
+    finaldata = {}
+    document_T2 = coll_ter_data.find().sort("_id", -1)[0]
+    print(document_T2['_id'])
+    # 对热电偶的id进行转化
+    print('list_tag_data length: ', len(list_tag_data))
+    print('total number: ', len(list(document_T2['tags'])))
+    for i in range(len(list_tag_data)):
+        key = list_tag_data[i]['TAGNAME']
+        tag = list_tag_data[i]['NAME']
+        val = document_T2['tags'][key]
+        data[tag] = val
+    print(data)
+
+
+    # 以下是一期宝钢 flask框架代码
+    # args = request.args
+    # if len(args) == 0:
+    #     finaldata = data
+    # else:
+    #
+    #     arg = args.get('layer')
+    #     layers = re.split(r'[，,;；\s]\s*', arg)
+    #     for layer in layers:
+    #         layerdata = {}
+    #
+    #         if layer == '1' or layer == 1:
+    #             for key, value in data.items():
+    #                 if key.endswith('A') or re.match(r'.*[0-9]$', key):
+    #                     layerdata[key] = value
+    #             print(len(layerdata))
+    #             finaldata[layer] = layerdata
+    #             continue
+    #         elif layer == '0' or layer == 0:
+    #             finaldata[layer] = data
+    #         else:
+    #             for key, value in data.items():
+    #                 if key.endswith(aplphabetmap[layer]):
+    #                     layerdata[key] = value
+    #             finaldata[layer] = layerdata
+    #             continue
+    #
+    # return jsonify(finaldata)
