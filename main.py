@@ -4,8 +4,13 @@
 import math
 from pymongo import MongoClient
 import flask
+from flask_cors import CORS
 from flask import jsonify
 from flask import request
+from configparser import ConfigParser
+import os
+from gevent import pywsgi
+
 '''
 常用mongodb api 
 client.list_database_names()  查所以表名
@@ -14,19 +19,78 @@ collection = client.admin.g4d301 选择集合
 collection .insert_one/insert_many 插入
 collection find/find_one 查找
 '''
+app = flask.Flask(__name__)
+CORS(app, resource=r'/*')
+
+# 以下是路由函数
+@app.route('/temperature', methods=['get', 'post'])
+def get_ter_data():
+    temper = "temperature2022"
+    tags = "bg_4bf_taginfo_bak"
+    coll_ter_data = myslag.link_coll(temper)
+    coll_tag_data = myslag.link_coll(tags)
+    list_tag_data = myslag.list_coll(coll_tag_data)
+    data = {}
+    finaldata = {}
+    document_T2 = coll_ter_data.find().sort("_id", -1)[0]
+    # print(document_T2['_id'])
+    # 对热电偶的id进行转化
+    # print('list_tag_data length: ', len(list_tag_data))
+    # print('total number: ', len(list(document_T2['tags'])))
+    for i in range(len(list_tag_data)):
+        key = list_tag_data[i]['TAGNAME']
+        tag = list_tag_data[i]['NAME']
+        val = document_T2['tags'][key]
+        data[tag] = val
+    print(data)
+    # 以下是一期宝钢 flask框架代码
+    args = request.args
+    if len(args) == 0:
+        finaldata = data
+    else:
+
+        arg = args.get('layer')
+        layers = re.split(r'[，,;；\s]\s*', arg)
+        for layer in layers:
+            layerdata = {}
+
+            if layer == '1' or layer == 1:
+                for key, value in data.items():
+                    if key.endswith('A') or re.match(r'.*[0-9]$', key):
+                        layerdata[key] = value
+                print(len(layerdata))
+                finaldata[layer] = layerdata
+                continue
+            elif layer == '0' or layer == 0:
+                finaldata[layer] = data
+            else:
+                for key, value in data.items():
+                    if key.endswith(aplphabetmap[layer]):
+                        layerdata[key] = value
+                finaldata[layer] = layerdata
+                continue
+
+    return jsonify(finaldata)
+# 以上是路由函数
 
 
 class Slag(object):
 
     def __init__(self):
+        self.servicePort = None
+        self.serviceIp = None
         self.client = None
         self.db = None
         self.client_list = None
 
-    def link_client(self, host='localhost', port=27017):
+    def link_client(self, ip, port, db, authentication_database, username, password):
         # 连接db
         try:
-            self.client = MongoClient(host, port, serverSelectionTimeoutMS=10)
+            self.client = MongoClient(ip, port, serverSelectionTimeoutMS=10)
+            #---有bug
+            # authDB = self.client[authentication_database]
+            # authDB.authenticate(username, password)
+            #---有bug
             self.client.admin.command('ping')
             self.client_list = self.client.list_database_names()
             print('client links success')
@@ -51,9 +115,21 @@ class Slag(object):
         # 获取数据库
         self.db = self.client.get_database(db)
 
-    def db_start(self, host='localhost', port=27017, db='admin'):
-        self.link_client(host, port)
+    def db_start(self, db='admin'):
+        cfg = ConfigParser()
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        cfg.read(os.path.join(BASE_DIR, 'config.ini'))
+        ip = cfg.get('database', 'ip')
+        port = cfg.getint('database', 'port')
+        authentication_database = cfg.get('database', 'authentication_database')
+        username = cfg.get('database', 'username')
+        password = cfg.get('database', 'password')
+        self.link_client(ip, port, db, authentication_database, username, password)
         self.link_db(db)
+        self.serviceIp = cfg.get('data_service', 'ip')
+        self.servicePort = cfg.get('data_service', 'port')
+        server = pywsgi.WSGIServer((self.serviceIp, int(self.servicePort)), app)
+        server.serve_forever()
 
 
     def link_coll(self, collection):
@@ -136,53 +212,7 @@ class Slag(object):
         result = self.cal_slag_thickness1(r3LowerLayerCoeff, 43.3)
         print(result)
 
-    def get_ter_data(self, temper="temperature2022", tags="bg_4bf_taginfo_bak"):
-        coll_ter_data = self.link_coll(temper)
-        coll_tag_data = self.link_coll(tags)
-        list_tag_data = self.list_coll(coll_tag_data)
-        data = {}
-        finaldata = {}
-        document_T2 = coll_ter_data.find().sort("_id", -1)[0]
-        # print(document_T2['_id'])
-        # 对热电偶的id进行转化
-        # print('list_tag_data length: ', len(list_tag_data))
-        # print('total number: ', len(list(document_T2['tags'])))
-        for i in range(len(list_tag_data)):
-            key = list_tag_data[i]['TAGNAME']
-            tag = list_tag_data[i]['NAME']
-            val = document_T2['tags'][key]
-            data[tag] = val
-        print(data)
-        # 以下是一期宝钢 flask框架代码
-        # args = request.args
-        # if len(args) == 0:
-        #     finaldata = data
-        # else:
-        #
-        #     arg = args.get('layer')
-        #     layers = re.split(r'[，,;；\s]\s*', arg)
-        #     for layer in layers:
-        #         layerdata = {}
-        #
-        #         if layer == '1' or layer == 1:
-        #             for key, value in data.items():
-        #                 if key.endswith('A') or re.match(r'.*[0-9]$', key):
-        #                     layerdata[key] = value
-        #             print(len(layerdata))
-        #             finaldata[layer] = layerdata
-        #             continue
-        #         elif layer == '0' or layer == 0:
-        #             finaldata[layer] = data
-        #         else:
-        #             for key, value in data.items():
-        #                 if key.endswith(aplphabetmap[layer]):
-        #                     layerdata[key] = value
-        #             finaldata[layer] = layerdata
-        #             continue
-        #
-        # return jsonify(finaldata)
-
 if __name__ == '__main__':
     myslag = Slag()
     myslag.db_start()
-    myslag.get_ter_data()
+    # myslag.get_ter_data()
